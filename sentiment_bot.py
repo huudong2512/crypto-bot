@@ -1,7 +1,7 @@
 import datetime
 import requests
 
-# --- CẤU HÌNH THÔNG TIN CỦA BẠN ---
+# --- CẤU HÌNH THÔNG TIN CÁ NHÂN CỦA BẠN ---
 TELEGRAM_BOT_TOKEN = "8810905518:AAH-l70WmQaQ3v1DqlXu7j9JquX0yJfZpOk"
 TELEGRAM_CHAT_ID = "413611713"
 COINGLASS_API_KEY = "3cf3522543f8449795ea641ec3e4f80d"
@@ -11,18 +11,20 @@ def send_telegram_message(text):
   url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
   payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
   try:
-    requests.post(url, json=payload, timeout=10)
+    res = requests.post(url, json=payload, timeout=10)
+    print(f"Gửi Telegram status: {res.status_code}")
   except Exception as e:
     print(f"Lỗi gửi Telegram: {e}")
 
 
-def get_btc_price_global():
-  """Lấy giá BTC từ CoinGecko (Không bao giờ bị chặn Cloud/US IP)."""
+def get_btc_price_coingecko():
+  """Lấy thị giá BTC từ CoinGecko (Hoàn toàn mở, không bao giờ bị chặn)."""
   try:
     url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
     res = requests.get(url, timeout=10).json()
     return float(res["bitcoin"]["usd"])
-  except Exception:
+  except Exception as e:
+    print(f"Lỗi lấy giá BTC: {e}")
     return 0.0
 
 
@@ -35,7 +37,7 @@ def get_coinglass_data():
       ),
   }
 
-  btc_price = get_btc_price_global()
+  btc_price = get_btc_price_coingecko()
   funding_rate = 0.0
   long_acc_pct, short_acc_pct = 50.0, 50.0
   buy_vol_btc, sell_vol_btc = 0.0, 0.0
@@ -46,15 +48,17 @@ def get_coinglass_data():
     url = "https://open-api-v3.coinglass.com/api/pro/v1/futures/funding_rates/chart?symbol=BTC&type=0"
     res = requests.get(url, headers=headers, timeout=10).json()
     if res.get("code") == "0" and res.get("data"):
-      # Lấy chỉ số Funding mới nhất
       data_list = res["data"]
-      if data_list:
+      if isinstance(data_list, list) and len(data_list) > 0:
         latest = data_list[-1]
-        funding_rate = float(latest.get("uMarginList", [0])[0]) * 100
+        if isinstance(latest, dict):
+          margin_list = latest.get("uMarginList", [])
+          if margin_list and len(margin_list) > 0:
+            funding_rate = float(margin_list[0]) * 100
   except Exception as e:
-    print(f"CoinGlass Funding Error: {e}")
+    print(f"Lỗi CoinGlass Funding: {e}")
 
-  # 2. KÉO TỶ LỆ LONG/SHORT CỦA TOÀN THỊ TRƯỜNG TỪ COINGLASS
+  # 2. KÉO TỶ LỆ LONG/SHORT TỪ COINGLASS
   try:
     url = "https://open-api-v3.coinglass.com/api/pro/v1/futures/longShort_chart?symbol=BTC&time_type=1"
     res = requests.get(url, headers=headers, timeout=10).json()
@@ -66,7 +70,7 @@ def get_coinglass_data():
         long_acc_pct = float(long_list[-1])
         short_acc_pct = float(short_list[-1])
   except Exception as e:
-    print(f"CoinGlass Long/Short Error: {e}")
+    print(f"Lỗi CoinGlass Long/Short: {e}")
 
   # 3. KÉO KHỐI LƯỢNG TAKER BUY/SELL VOL TỪ COINGLASS
   try:
@@ -84,7 +88,7 @@ def get_coinglass_data():
           buy_vol_pct = (buy_vol_btc / total) * 100
           sell_vol_pct = 100 - buy_vol_pct
   except Exception as e:
-    print(f"CoinGlass Vol Error: {e}")
+    print(f"Lỗi CoinGlass Taker Vol: {e}")
 
   return (
       btc_price,
@@ -138,5 +142,5 @@ def get_market_sentiment_report():
 
 if __name__ == "__main__":
   report_text = get_market_sentiment_report()
+  print(report_text)
   send_telegram_message(report_text)
-  print("Đã gửi báo cáo CoinGlass về Telegram thành công!")
