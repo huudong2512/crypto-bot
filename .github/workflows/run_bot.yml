@@ -1,9 +1,9 @@
-name: Wyckoff 2.0 Scanner
+name: Wyckoff 2.0 Scanner (15m-1H-4H)
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # Quét mỗi 15 phút (báo ngay nếu có kèo, và gửi tổng hợp mỗi 4H)
-  workflow_dispatch:       # Cho phép bấm nút "Run workflow" chạy thử ngay lập tức
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -22,8 +22,7 @@ jobs:
 
       - name: Run Wyckoff Scanner
         env:
-          env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          FORCE_REPORT: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          FORCE_ALL_TF: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: python sentiment_bot.py
